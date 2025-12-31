@@ -182,6 +182,121 @@
 
 
 
+////version iii - without ascii art
+// #include <stdio.h>
+// #include <stdint.h>
+// #include <string.h>
+
+// #include "mxc_device.h"
+// #include "mxc_sys.h"
+// #include "icc.h"
+// #include "pb.h"
+// #include "led.h"
+// #include "dma.h"
+// #include "cnn.h"
+// #include "camera.h"
+// #include "mxc_delay.h"
+// #include "tft_ili9341.h"
+
+// // ---------------- CONFIG ----------------
+// #define IMAGE_X 128
+// #define IMAGE_Y 128
+// #define CAMERA_FREQ (5 * 1000 * 1000)
+
+// // Classes
+// const char *classes[] = { "Car", "Bicycle" };
+
+// // CNN output
+// static int32_t ml_data[CNN_NUM_OUTPUTS];
+// static q15_t ml_softmax[CNN_NUM_OUTPUTS];
+// volatile uint32_t cnn_time;
+
+// // Camera buffer
+// static uint32_t cnn_input[IMAGE_X * IMAGE_Y];
+
+// // ---------------------------------------
+
+// void capture_image(void)
+// {
+//     uint8_t *raw, *data;
+//     uint32_t len, w, h;
+//     int cnt = 0;
+
+//     camera_start_capture_image();
+//     camera_get_image(&raw, &len, &w, &h);
+
+//     for (int y = 0; y < h; y++) {
+//         while ((data = get_camera_stream_buffer()) == NULL);
+//         for (int x = 0; x < w * 4; x += 4) {
+//             uint8_t r = data[x];
+//             uint8_t g = data[x + 1];
+//             uint8_t b = data[x + 2];
+//             cnn_input[cnt++] = ((b << 16) | (g << 8) | r) ^ 0x00808080;
+//         }
+//         release_camera_stream_buffer();
+//     }
+// }
+
+// int main(void)
+// {
+//     int i, digs, tens;
+
+//     MXC_ICC_Enable(MXC_ICC0);
+//     MXC_SYS_Clock_Select(MXC_SYS_CLOCK_IPO);
+//     SystemCoreClockUpdate();
+
+//     printf("\n=== Car vs Bicycle Camera Demo ===\n");
+
+//     MXC_DMA_Init();
+//     int dma = MXC_DMA_AcquireChannel();
+
+//     Camera_Power(POWER_ON);
+//     camera_init(CAMERA_FREQ);
+//     camera_setup(IMAGE_X, IMAGE_Y, PIXFORMAT_RGB888,
+//                  FIFO_THREE_BYTE, STREAMING_DMA, dma);
+
+//     cnn_enable(MXC_S_GCR_PCLKDIV_CNNCLKSEL_PCLK,
+//                MXC_S_GCR_PCLKDIV_CNNCLKDIV_DIV1);
+
+//     cnn_init();
+//     cnn_load_weights();
+//     cnn_load_bias();
+//     cnn_configure();
+
+//     printf("Press PB1 to capture image\n");
+
+//     while (1) {
+//         while (!PB_Get(0));   // wait press
+//         MXC_Delay(200000);    // debounce
+
+//         capture_image();
+
+//         cnn_start();
+//         for (i = 0; i < IMAGE_X * IMAGE_Y; i++) {
+//             while (*((volatile uint32_t*)0x50000004) & 1);
+//             *((volatile uint32_t*)0x50000008) = cnn_input[i];
+//         }
+
+//         while (cnn_time == 0) __WFI();
+
+//         cnn_unload((uint32_t*)ml_data);
+//         softmax_q17p14_q15((q31_t*)ml_data, CNN_NUM_OUTPUTS, ml_softmax);
+
+//         printf("\nInference time: %dus\n", cnn_time);
+//         printf("Results:\n");
+
+//         for (i = 0; i < CNN_NUM_OUTPUTS; i++) {
+//             digs = (1000 * ml_softmax[i] + 0x4000) >> 15;
+//             tens = digs % 10;
+//             digs /= 10;
+//             printf("[%7d] %s: %d.%d%%\n",
+//                    ml_data[i], classes[i], digs, tens);
+//         }
+
+//         cnn_time = 0;
+//         printf("\nPress PB1 to capture again\n");
+//     }
+// }
 
 
 
@@ -190,229 +305,163 @@
 
 
 
-/*******************************************************************************
-* Copyright (C) 2019-2023 Maxim Integrated Products, Inc.
-* All rights Reserved.
-*******************************************************************************/
 
-#include <stdlib.h>
+
+
+
+
+
+
+
+
+
+
+////version ii - with ascii
+
+/****************************************************************************** 
+* CarBicycle classification with camera capture, PB1 button, CNN
+* ASCII preview adapted from Cats-Dogs demo
+******************************************************************************/
+
+#include <stdio.h>
 #include <stdint.h>
 #include <string.h>
-#include <stdio.h>
-#include "mxc.h"
-#include "cnn.h"
-#include "sampledata.h"
-#include "sampleoutput.h"
+
 #include "mxc_device.h"
 #include "mxc_sys.h"
-#include "fcr_regs.h"
 #include "icc.h"
-#include "led.h"
-#include "tmr.h"
-#include "dma.h"
 #include "pb.h"
-#include "mxc_delay.h"
+#include "led.h"
+#include "dma.h"
+#include "cnn.h"
 #include "camera.h"
+#include "mxc_delay.h"
 
-// ================= Configuration =================
-#define ASCII_ART
-#define IMAGE_SIZE_X (128)
-#define IMAGE_SIZE_Y (128)
+// ---------------- CONFIG ----------------
+#define IMAGE_X 128
+#define IMAGE_Y 128
 #define CAMERA_FREQ (5 * 1000 * 1000)
 
-// CNN input buffer (HWC 3x128x128)
-static uint32_t input_0[IMAGE_SIZE_X * IMAGE_SIZE_Y];
+// Classes
+const char *classes[] = { "Car", "Bicycle" };
 
 // CNN output
 static int32_t ml_data[CNN_NUM_OUTPUTS];
 static q15_t ml_softmax[CNN_NUM_OUTPUTS];
-
-// Stopwatch
 volatile uint32_t cnn_time;
 
-// ================= ASCII Art =====================
-#ifdef ASCII_ART
-char *brightness = "@%#*+=-:.";
-#define RATIO 2
+// Camera buffer (CNN input)
+static uint32_t cnn_input[IMAGE_X * IMAGE_Y];
 
-void asciiart(uint8_t *img) {
-    int skip_x, skip_y;
-    uint8_t r, g, b, Y;
-    uint8_t *srcPtr = img;
-    int l = strlen(brightness) - 1;
+// ---------------------------------------
+// ASCII ART SUPPORT (compact)
+#define ASCII_W 32
+#define ASCII_H 16
+static const char *ascii_lut = "@%#*+=-:. ";
 
-    skip_x = RATIO;
-    skip_y = RATIO;
+void asciiart(uint32_t *img)
+{
+    int levels = strlen(ascii_lut) - 1;
+    int step_x = IMAGE_X / ASCII_W;
+    int step_y = IMAGE_Y / ASCII_H;
 
-    for(int i = 0; i < IMAGE_SIZE_Y; i++) {
-        for(int j = 0; j < IMAGE_SIZE_X; j++) {
-            r = *srcPtr++ ^ 0x80;
-            g = *srcPtr++ ^ 0x80;
-            b = *srcPtr++ ^ 0x80;
-            srcPtr++; // skip MSB
+    for (int y = 0; y < IMAGE_Y; y += step_y) {
+        for (int x = 0; x < IMAGE_X; x += step_x) {
+            uint32_t p = img[y * IMAGE_X + x];
+            uint8_t r = (p & 0xFF) ^ 0x80;
+            uint8_t g = ((p >> 8) & 0xFF) ^ 0x80;
+            uint8_t b = ((p >> 16) & 0xFF) ^ 0x80;
 
-            Y = (3*r + b + 4*g) >> 3; // luminance
-            if ((skip_x == RATIO) && (skip_y == RATIO))
-                printf("%c", brightness[l - (Y*l/255)]);
-            skip_x++;
-            if (skip_x > RATIO) skip_x = 1;
+            uint8_t yval = (3 * r + 4 * g + b) >> 3;
+            char c = ascii_lut[levels - (yval * levels / 255)];
+            putchar(c);
         }
-        skip_y++;
-        if (skip_y > RATIO) {
-            printf("\n");
-            skip_y = 1;
-        }
+        putchar('\n');
     }
 }
-#endif
+// ---------------------------------------
 
-// ================= Fail Function =================
-void fail(void){
-    printf("\n*** FAIL ***\n\n");
-    while(1);
-}
-
-// ================= Load CNN Input =================
-void load_input(void){
-    int i;
-    const uint32_t *in0 = input_0;
-
-    for (i = 0; i < 16384; i++) {
-        uint32_t timeout = 10000000;
-        while (((*((volatile uint32_t *) 0x50000004) & 1)) != 0) {
-            if (timeout-- == 0) {
-                printf("ERROR: FIFO timeout at word %d!\n", i);
-                return;
-            }
-        }
-        *((volatile uint32_t *) 0x50000008) = *in0++;
-    }
-}
-
-// ================= Camera Capture =================
-void capture_process_camera(void){
-    uint8_t *raw;
-    uint32_t imgLen;
-    uint32_t w, h;
+void capture_image(void)
+{
+    uint8_t *raw, *data;
+    uint32_t len, w, h;
     int cnt = 0;
-    uint8_t r,g,b;
-    uint16_t rgb;
-    uint8_t *data = NULL;
-    stream_stat_t *stat;
 
-    printf("Starting camera capture...\n");
     camera_start_capture_image();
-    camera_get_image(&raw, &imgLen, &w, &h);
-    printf("W:%d H:%d L:%d\n", w, h, imgLen);
+    camera_get_image(&raw, &len, &w, &h);
 
-    for(int row = 0; row < h; row++) {
-        uint32_t stream_timeout = 1000000;
-        while ((data = get_camera_stream_buffer()) == NULL) {
-            if (camera_is_image_rcv()) break;
-            if (stream_timeout-- == 0) {
-                printf("ERROR: Camera stream timeout!\n");
-                return;
-            }
-        }
-
-        if (data == NULL) break;
-
-        for(int k=0; k<4*w; k+=4){
-            r = data[k];
-            g = data[k+1];
-            b = data[k+2];
-            input_0[cnt++] = ((b<<16)|(g<<8)|r)^0x00808080;
+    for (int y = 0; y < h; y++) {
+        while ((data = get_camera_stream_buffer()) == NULL);
+        for (int x = 0; x < w * 4; x += 4) {
+            uint8_t r = data[x];
+            uint8_t g = data[x + 1];
+            uint8_t b = data[x + 2];
+            cnn_input[cnt++] = ((b << 16) | (g << 8) | r) ^ 0x00808080;
         }
         release_camera_stream_buffer();
     }
-
-    stat = get_camera_stream_statistic();
-    if (stat->overflow_count > 0) {
-        printf("OVERFLOW DETECTED = %d\n", stat->overflow_count);
-        LED_On(LED2);
-    } else {
-        printf("Camera stream OK\n");
-    }
 }
 
-// ================= Softmax =================
-void softmax_layer(void){
-    cnn_unload((uint32_t *) ml_data);
-    softmax_q17p14_q15((const q31_t *) ml_data, CNN_NUM_OUTPUTS, ml_softmax);
-}
+int main(void)
+{
+    int i, digs, tens;
 
-// ================= Main =================
-int main(void){
-    int i, digs, tens, ret = 0;
-    int result[CNN_NUM_OUTPUTS];
-
-    // Classes for CarBicycle
-    const char classes[CNN_NUM_OUTPUTS][20] = {"Car","Bicycle"};
-
-    MXC_ICC_Enable(MXC_ICC0); // Enable cache
+    MXC_ICC_Enable(MXC_ICC0);
     MXC_SYS_Clock_Select(MXC_SYS_CLOCK_IPO);
     SystemCoreClockUpdate();
-    MXC_Delay(SEC(2));
 
-    // CNN setup
-    cnn_enable(MXC_S_GCR_PCLKDIV_CNNCLKSEL_PCLK, MXC_S_GCR_PCLKDIV_CNNCLKDIV_DIV1);
+    printf("\n=== Car vs Bicycle Camera Demo III ===\n");
+
+    MXC_DMA_Init();
+    int dma = MXC_DMA_AcquireChannel();
+
+    Camera_Power(POWER_ON);
+    camera_init(CAMERA_FREQ);
+    camera_setup(IMAGE_X, IMAGE_Y, PIXFORMAT_RGB888,
+                 FIFO_THREE_BYTE, STREAMING_DMA, dma);
+
+    cnn_enable(MXC_S_GCR_PCLKDIV_CNNCLKSEL_PCLK,
+               MXC_S_GCR_PCLKDIV_CNNCLKDIV_DIV1);
+
     cnn_init();
     cnn_load_weights();
     cnn_load_bias();
     cnn_configure();
-    printf("CNN initialized successfully\n");
 
-    // Camera setup
-    MXC_DMA_Init();
-    int dma_channel = MXC_DMA_AcquireChannel();
-    camera_init(CAMERA_FREQ);
-    ret = camera_setup(IMAGE_SIZE_X, IMAGE_SIZE_Y, PIXFORMAT_RGB888, FIFO_THREE_BYTE, STREAMING_DMA, dma_channel);
-    camera_write_reg(0x11, 0x0);
+    printf("Press PB1 to capture image\n");
 
-    printf("********** Press PB1(SW1) to capture an image **********\n");
-    while (!PB_Get(0)) {}
+    while (1) {
+        while (!PB_Get(0));   // wait press
+        MXC_Delay(200000);    // debounce
 
-    while (1){
-        LED_Off(LED1);
-        LED_Off(LED2);
+        capture_image();
 
-        printf("\n--- Starting capture and inference cycle ---\n");
-        capture_process_camera();
+        printf("\n--- CAMERA ASCII PREVIEW ---\n");
+        asciiart(cnn_input);
 
         cnn_start();
-        load_input();
-
-        uint32_t cnn_timeout = 5000000;
-        while (cnn_time==0) __WFI();
-        cnn_time = 0;
-
-        softmax_layer();
-
-        printf("\nClassification results:\n");
-        for (i=0; i<CNN_NUM_OUTPUTS; i++){
-            digs = (1000*ml_softmax[i]+0x4000)>>15;
-            tens = digs%10;
-            digs = digs/10;
-            result[i] = digs;
-            printf("[%7d] -> %20s: %d.%d%%\n", ml_data[i], classes[i], result[i], tens);
+        for (i = 0; i < IMAGE_X * IMAGE_Y; i++) {
+            while (*((volatile uint32_t*)0x50000004) & 1);
+            *((volatile uint32_t*)0x50000008) = cnn_input[i];
         }
 
-#ifdef ASCII_ART
-        printf("\nASCII Art:\n");
-        asciiart((uint8_t*)input_0);
-#endif
+        while (cnn_time == 0) __WFI();
 
-        printf("********** Press PB1(SW1) to capture another image **********\n");
-        while(!PB_Get(0)) {}
+        cnn_unload((uint32_t*)ml_data);
+        softmax_q17p14_q15((q31_t*)ml_data, CNN_NUM_OUTPUTS, ml_softmax);
+
+        printf("\nInference time: %dus\n", cnn_time);
+        printf("Classification results:\n");
+
+        for (i = 0; i < CNN_NUM_OUTPUTS; i++) {
+            digs = (1000 * ml_softmax[i] + 0x4000) >> 15;
+            tens = digs % 10;
+            digs /= 10;
+            printf("[%7d] %s: %d.%d%%\n",
+                   ml_data[i], classes[i], digs, tens);
+        }
+
+        cnn_time = 0;
+        printf("\nPress PB1 to capture again\n");
     }
-
-    return 0;
 }
-
-
-
-
-
-
-
-
