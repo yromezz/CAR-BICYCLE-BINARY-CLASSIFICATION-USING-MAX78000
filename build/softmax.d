@@ -27,7 +27,7 @@ C:/MaximSDK/Examples/MAX78000/CNN/CarBicycle/build/softmax.o: softmax.c \
  ../../../../Libraries/CMSIS/Device/Maxim/MAX78000/Include/lpgcr_regs.h \
  ../../../../Libraries/CMSIS/Device/Maxim/MAX78000/Include/gcr_regs.h \
  ../../../../Libraries/PeriphDrivers/Include/MAX78000/nvic_table.h \
- C:/MaximSDK/Libraries/Boards/MAX78000/EvKit_V1/Include/board.h \
+ C:/MaximSDK/Libraries/Boards/MAX78000/FTHR_RevA/Include/board.h \
  C:/Program\ Files\ (x86)/Arm\ GNU\ Toolchain\ arm-none-eabi/14.3\ rel1/arm-none-eabi/include/stdio.h \
  C:/Program\ Files\ (x86)/Arm\ GNU\ Toolchain\ arm-none-eabi/14.3\ rel1/arm-none-eabi/include/_ansi.h \
  C:/Program\ Files\ (x86)/Arm\ GNU\ Toolchain\ arm-none-eabi/14.3\ rel1/arm-none-eabi/include/newlib.h \
@@ -42,11 +42,12 @@ C:/MaximSDK/Examples/MAX78000/CNN/CarBicycle/build/softmax.o: softmax.c \
  C:/Program\ Files\ (x86)/Arm\ GNU\ Toolchain\ arm-none-eabi/14.3\ rel1/arm-none-eabi/include/machine/_types.h \
  C:/Program\ Files\ (x86)/Arm\ GNU\ Toolchain\ arm-none-eabi/14.3\ rel1/arm-none-eabi/include/sys/lock.h \
  C:/Program\ Files\ (x86)/Arm\ GNU\ Toolchain\ arm-none-eabi/14.3\ rel1/arm-none-eabi/include/sys/stdio.h \
- ../../../../Libraries/MiscDrivers/Display/tft_ssd2119.h \
+ ../../../../Libraries/CMSIS/Device/Maxim/MAX78000/Include/spi_regs.h \
+ ../../../../Libraries/MiscDrivers/Display/tft_ili9341.h \
  ../../../../Libraries/PeriphDrivers/Include/MAX78000/spi.h \
  C:/Program\ Files\ (x86)/Arm\ GNU\ Toolchain\ arm-none-eabi/14.3\ rel1/lib/gcc/arm-none-eabi/14.3.1/include/stdbool.h \
- ../../../../Libraries/CMSIS/Device/Maxim/MAX78000/Include/spi_regs.h \
  ../../../../Libraries/PeriphDrivers/Include/MAX78000/gpio.h \
+ C:/MaximSDK/Libraries/MiscDrivers/Display/fonts/fonts.h \
  ../../../../Libraries/MiscDrivers/Touchscreen/tsc2046.h \
  ../../../../Libraries/MiscDrivers/LED/led.h \
  ../../../../Libraries/PeriphDrivers/Include/MAX78000/mxc_assert.h \

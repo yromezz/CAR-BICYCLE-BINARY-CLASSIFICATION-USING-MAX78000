@@ -463,7 +463,7 @@
 #define TARGET_REV 0x4131
 #define DEBUG 1
 #define MXC_ASSERT_ENABLE 1
-#define ARM_MATH_CM4 1
 #define LIB_BOARD 1
 #define CAMERA_OV7692 1
+#define FONT_LiberationSans16x16 1
 #define MXC_SPI_V1 1
